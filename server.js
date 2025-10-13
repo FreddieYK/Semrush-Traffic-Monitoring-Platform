@@ -48,7 +48,7 @@ const parseValue = (value) => {
 // 加载初始Excel数据的路由
 app.get('/api/load-excel', (req, res) => {
   try {
-    const excelPath = path.join(__dirname, '..', '网站流量数据.xlsx');
+    const excelPath = path.join(__dirname, '网站流量数据.xlsx');
     
     if (!fs.existsSync(excelPath)) {
       return res.json({ success: false, message: '初始Excel文件不存在' });
