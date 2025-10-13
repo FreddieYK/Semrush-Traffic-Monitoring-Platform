@@ -33,34 +33,18 @@ function App() {
   const [showTrafficModal, setShowTrafficModal] = useState(false);
   const [selectedTrafficCompany, setSelectedTrafficCompany] = useState(null); // 'traffic' 或 'competitor'
 
-  // 从本地存储加载数据
+  // 页面加载时自动获取数据
   useEffect(() => {
-    const savedData = localStorage.getItem('trafficData');
-    if (savedData) {
-      setData(JSON.parse(savedData));
-    } else {
-      // 加载初始Excel数据
-      loadInitialData();
-    }
-    
-    // 从本地存储加载竞争对手数据
-    const savedCompetitorData = localStorage.getItem('competitorData');
-    if (savedCompetitorData) {
-      try {
-        const parsedCompetitorData = JSON.parse(savedCompetitorData);
-        setCompetitorData(parsedCompetitorData);
-        console.log('从本地存储加载竞争对手数据:', parsedCompetitorData.length);
-      } catch (error) {
-        console.error('解析本地存储竞争对手数据失败:', error);
-      }
-    }
+    // 总是尝试从服务器加载最新数据
+    loadInitialData();
+    loadCompetitorData();
   }, []);
 
   const loadInitialData = async () => {
     try {
       setLoading(true);
       const apiUrl = process.env.NODE_ENV === 'production' 
-        ? process.env.REACT_APP_API_URL || 'https://your-railway-app.railway.app'
+        ? process.env.REACT_APP_API_URL || 'https://semrush-traffic-monitoring-platform-production.up.railway.app'
         : '/api';
       const response = await fetch(`${apiUrl}/load-excel`);
       const result = await response.json();
@@ -81,7 +65,7 @@ function App() {
       console.log('开始加载竞争对手数据...');
       setCompetitorLoading(true);
       const apiUrl = process.env.NODE_ENV === 'production' 
-        ? process.env.REACT_APP_API_URL || 'https://your-railway-app.railway.app'
+        ? process.env.REACT_APP_API_URL || 'https://semrush-traffic-monitoring-platform-production.up.railway.app'
         : '/api';
       const response = await fetch(`${apiUrl}/competitor-matching`);
       console.log('API响应状态:', response.status);
