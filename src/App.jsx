@@ -43,6 +43,7 @@ function App() {
   const loadInitialData = async () => {
     try {
       setLoading(true);
+      console.log('开始加载初始数据...');
       const apiUrl = process.env.NODE_ENV === 'production' 
         ? 'https://semrush-traffic-monitoring-platform-production.up.railway.app'
         : '/api';
