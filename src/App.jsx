@@ -51,6 +51,10 @@ function App() {
       if (result.success) {
         setData(result.data);
         localStorage.setItem('trafficData', JSON.stringify(result.data));
+      } else {
+        console.log('后端数据加载失败:', result.message);
+        // 如果后端自动加载失败，显示上传提示
+        setData([]);
       }
     } catch (error) {
       console.error('加载初始数据失败:', error);
