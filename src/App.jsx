@@ -44,9 +44,11 @@ function App() {
     try {
       setLoading(true);
       console.log('开始加载初始数据...');
+      console.log('当前环境:', process.env.NODE_ENV);
       const apiUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://semrush-traffic-monitoring-platform-production.up.railway.app'
+        ? 'https://semrush-traffic-monitoring-platform-production.up.railway.app/api'
         : '/api';
+      console.log('API URL:', apiUrl);
       const response = await fetch(`${apiUrl}/load-excel`);
       const result = await response.json();
       if (result.success) {
@@ -70,7 +72,7 @@ function App() {
       console.log('开始加载竞争对手数据...');
       setCompetitorLoading(true);
       const apiUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://semrush-traffic-monitoring-platform-production.up.railway.app'
+        ? 'https://semrush-traffic-monitoring-platform-production.up.railway.app/api'
         : '/api';
       const response = await fetch(`${apiUrl}/competitor-matching`);
       console.log('API响应状态:', response.status);
