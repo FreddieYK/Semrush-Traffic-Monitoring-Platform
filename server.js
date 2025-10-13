@@ -48,37 +48,7 @@ const parseValue = (value) => {
 // 加载初始Excel数据的路由
 app.get('/api/load-excel', (req, res) => {
   try {
-    const excelPath = path.join(__dirname, '网站流量数据.xlsx');
-    
-    if (!fs.existsSync(excelPath)) {
-      return res.json({ success: false, message: '初始Excel文件不存在' });
-    }
-
-    const workbook = XLSX.readFile(excelPath);
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-    // 处理数据
-    const processedData = jsonData.map((row, index) => {
-      // 处理特殊值，确保转换为数值
-      const currentMonthVisits = parseValue(row['九月访问量']);
-      const previousMonthVisits = parseValue(row['八月访问量']);
-      const momChange = calculateMoMChange(currentMonthVisits, previousMonthVisits);
-
-      return {
-        id: index + 1,
-        公司: row['公司'] || '',
-        域名: row['域名'] || '',
-        上月访问量: previousMonthVisits,
-        当月访问量: currentMonthVisits,
-        访问量环比变化: momChange,
-        购买转化率: parseValue(row['购买转化率']),
-        平均访问时长: parseValue(row['平均访问时长'])
-      };
-    });
-
-    res.json({ success: true, data: processedData });
+    res.json({ success: true, data: globalTrafficData });
   } catch (error) {
     console.error('加载Excel文件失败:', error);
     res.status(500).json({ success: false, message: '加载数据失败', error: error.message });
@@ -273,12 +243,139 @@ app.get('/api/competitor-matching', (req, res) => {
       };
     });
 
-    res.json({ success: true, data: processedData });
+    res.json({ success: true, data: globalCompetitorData });
   } catch (error) {
     console.error('加载竞争对手匹配数据失败:', error);
     res.status(500).json({ success: false, message: '加载数据失败', error: error.message });
   }
 });
+
+// 全局变量存储数据
+let globalTrafficData = [];
+let globalCompetitorData = [];
+
+// 加载流量数据函数
+const loadTrafficData = () => {
+  try {
+    console.log('正在加载流量数据...');
+    const excelPath = path.join(__dirname, '网站流量数据.xlsx');
+    
+    if (!fs.existsSync(excelPath)) {
+      console.log('流量数据Excel文件不存在');
+      return [];
+    }
+
+    const workbook = XLSX.readFile(excelPath);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+    const processedData = jsonData.map((row, index) => {
+      const currentMonthVisits = parseValue(row['九月访问量']);
+      const previousMonthVisits = parseValue(row['八月访问量']);
+      const momChange = calculateMoMChange(currentMonthVisits, previousMonthVisits);
+
+      return {
+        id: index + 1,
+        公司: row['公司'] || '',
+        域名: row['域名'] || '',
+        上月访问量: previousMonthVisits,
+        当月访问量: currentMonthVisits,
+        访问量环比变化: momChange,
+        购买转化率: parseValue(row['购买转化率']),
+        平均访问时长: parseValue(row['平均访问时长'])
+      };
+    });
+
+    console.log(`流量数据加载完成: ${processedData.length} 条`);
+    return processedData;
+  } catch (error) {
+    console.error('加载流量数据失败:', error);
+    return [];
+  }
+};
+
+// 加载竞争对手数据函数
+const loadCompetitorData = () => {
+  try {
+    console.log('正在加载竞争对手数据...');
+    const excelPath = path.join(__dirname, '流量前一百竞争对手匹配.xlsx');
+    
+    if (!fs.existsSync(excelPath)) {
+      console.log('竞争对手数据Excel文件不存在');
+      return [];
+    }
+
+    const workbook = XLSX.readFile(excelPath);
+    const sheet1 = workbook.Sheets[workbook.SheetNames[0]];
+    const sheet2 = workbook.Sheets[workbook.SheetNames[1]];
+    
+    const sheet1Data = XLSX.utils.sheet_to_json(sheet1);
+    const sheet2Data = XLSX.utils.sheet_to_json(sheet2);
+
+    // 创建投资机构映射
+    const investmentMapping = {};
+    sheet2Data.forEach(row => {
+      const companyName = (row['公司'] || '').toLowerCase().trim();
+      if (companyName) {
+        investmentMapping[companyName] = row['投资机构'] || '';
+      }
+    });
+
+    // 加载流量数据用于匹配
+    const trafficData = loadTrafficData();
+    const trafficCompanyNames = new Set(
+      trafficData.map(row => (row.公司 || '').toLowerCase().trim()).filter(name => name)
+    );
+
+    const processedData = sheet1Data.map((row, index) => {
+      const companyName = (row['公司'] || '').toLowerCase().trim();
+      const hasInvestment = investmentMapping[companyName] ? true : false;
+      
+      // 检查竞争对手是否有流量数据
+      const competitors = (row['竞争对手'] || '').split(',').map(comp => comp.trim());
+      const matchedCompetitors = competitors.filter(comp => 
+        trafficCompanyNames.has(comp.toLowerCase().trim())
+      );
+      
+      // 创建竞争对手投资机构信息映射
+      const competitorInvestmentInfo = {};
+      competitors.forEach(comp => {
+        const compLower = comp.toLowerCase().trim();
+        if (investmentMapping[compLower]) {
+          competitorInvestmentInfo[comp] = investmentMapping[compLower];
+        }
+      });
+
+      return {
+        id: index + 1,
+        公司: row['公司'] || '',
+        竞争对手: row['竞争对手'] || '',
+        投资机构: investmentMapping[companyName] || '',
+        有投资机构: hasInvestment,
+        竞争对手有流量数据: matchedCompetitors.length > 0,
+        匹配的竞争对手: matchedCompetitors,
+        竞争对手投资机构信息: competitorInvestmentInfo
+      };
+    });
+
+    console.log(`竞争对手数据加载完成: ${processedData.length} 条`);
+    return processedData;
+  } catch (error) {
+    console.error('加载竞争对手数据失败:', error);
+    return [];
+  }
+};
+
+// 初始化数据
+const initializeData = async () => {
+  console.log('正在初始化数据...');
+  globalTrafficData = loadTrafficData();
+  globalCompetitorData = loadCompetitorData();
+  console.log('数据初始化完成！');
+  console.log(`流量数据: ${globalTrafficData.length} 条`);
+  console.log(`竞争对手数据: ${globalCompetitorData.length} 条`);
+};
 
 // 错误处理中间件
 app.use((error, req, res, next) => {
@@ -286,9 +383,10 @@ app.use((error, req, res, next) => {
   res.status(500).json({ success: false, message: '服务器内部错误' });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`后端服务运行在端口 ${PORT}`);
   console.log(`API地址: http://localhost:${PORT}`);
+  await initializeData();
 });
 
 module.exports = app;
