@@ -1,0 +1,43 @@
+北美基金流量监控平台 - GitHub上传文件清单
+===============================================
+
+总文件数：25个文件
+
+核心配置文件 (18个)：
+1. package.json - 项目配置和依赖
+2. package-lock.json - 依赖版本锁定
+3. package-railway.json - Railway专用简化配置
+4. server.js - 后端服务器代码
+5. index.html - 前端入口文件
+6. vite.config.js - Vite构建配置
+7. railway.json - Railway部署配置
+8. vercel.json - Vercel部署配置
+9. .nvmrc - Node.js版本指定
+10. README.md - 项目说明文档
+11. DEPLOYMENT.md - 详细部署指南
+12. .gitignore - Git忽略文件配置
+13. env.example - 环境变量示例
+14. 上传说明.md - 上传操作指南
+15. RAILWAY第三次修复.md - Railway修复说明
+16. RAILWAY第四次修复.md - Railway第四次修复说明
+17. VERCEL部署指南.md - Vercel详细部署指南
+18. package-railway-simple.json - Railway简化配置
+
+前端源码 (3个)：
+19. src/App.jsx - 主应用组件
+20. src/index.css - 样式文件
+21. src/main.jsx - 应用入口
+
+数据文件 (2个)：
+22. 网站流量数据.xlsx - 流量数据
+23. 流量前一百竞争对手匹配.xlsx - 竞争对手数据
+
+辅助文件 (2个)：
+24. 文件清单.txt - 本文件
+25. 批量上传.bat - 上传辅助脚本
+
+上传建议：
+- 可以一次性上传所有25个文件
+- 如果遇到限制，可以分批上传
+- 建议先上传核心配置文件，再上传源码和数据文件
+- 特别注意：.nvmrc文件可能显示为隐藏文件，需要手动显示
