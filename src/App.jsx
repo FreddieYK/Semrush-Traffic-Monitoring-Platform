@@ -45,9 +45,7 @@ function App() {
       setLoading(true);
       console.log('开始加载初始数据...');
       console.log('当前环境:', process.env.NODE_ENV);
-      const apiUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://semrush-traffic-monitoring-platform-production.up.railway.app/api'
-        : '/api';
+      const apiUrl = import.meta.env.VITE_API_URL || '/api';
       console.log('API URL:', apiUrl);
       const response = await fetch(`${apiUrl}/load-excel`);
       const result = await response.json();
@@ -71,9 +69,7 @@ function App() {
     try {
       console.log('开始加载竞争对手数据...');
       setCompetitorLoading(true);
-      const apiUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://semrush-traffic-monitoring-platform-production.up.railway.app/api'
-        : '/api';
+      const apiUrl = import.meta.env.VITE_API_URL || '/api';
       const response = await fetch(`${apiUrl}/competitor-matching`);
       console.log('API响应状态:', response.status);
       const result = await response.json();
@@ -295,10 +291,31 @@ function App() {
     return (num * 100).toFixed(2) + '%';
   };
 
-  // 格式化访问时长
+  // 格式化访问时长（将秒数转换为可读的时间格式）
   const formatDuration = (duration) => {
     if (duration === null || duration === undefined || duration === 'n/a' || duration === '') return '0';
-    return duration;
+    
+    // 如果已经是字符串格式（如 "05:44"），直接返回
+    if (typeof duration === 'string' && duration.includes(':')) {
+      return duration;
+    }
+    
+    // 转换为数字（秒数）
+    const seconds = typeof duration === 'number' ? duration : parseFloat(duration) || 0;
+    
+    if (seconds === 0) return '0';
+    
+    // 计算小时和分钟
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    
+    // 如果小于1小时，只显示分钟
+    if (hours === 0) {
+      return `${minutes}分钟`;
+    }
+    
+    // 如果大于等于1小时，显示小时和分钟
+    return `${hours}:${minutes.toString().padStart(2, '0')}`;
   };
 
 
