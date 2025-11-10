@@ -53,3 +53,6 @@ temp/
 
 # Excel临时文件
 ~$*.xlsx
+
+# 上传文件目录
+uploads/

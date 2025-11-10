@@ -38,9 +38,60 @@ const calculateMoMChange = (current, previous) => {
 
 // 解析值，处理特殊值
 const parseValue = (value) => {
-  if (value === null || value === undefined || value === '' || value === 'n/a' || value === 'NaN' || isNaN(value)) {
+  // 处理空值和特殊字符串
+  if (value === null || value === undefined || value === '' || value === 'n/a' || value === 'NaN') {
     return 0;
   }
+  
+  // 如果是数字类型，直接返回
+  if (typeof value === 'number') {
+    return isNaN(value) ? 0 : value;
+  }
+  
+  // 如果是字符串，尝试解析
+  if (typeof value === 'string') {
+    // 移除空格
+    const trimmed = value.trim();
+    
+    // 空字符串检查
+    if (trimmed === '') {
+      return 0;
+    }
+    
+    // 处理百分比格式（如 "2.5%"）
+    if (trimmed.includes('%')) {
+      const num = parseFloat(trimmed.replace('%', '').replace(/,/g, ''));
+      return isNaN(num) ? 0 : num; // 保持百分比数值（2.5% -> 2.5）
+    }
+    
+    // 处理时间格式（如 "00:02:30" 或 "05:44"）
+    if (trimmed.includes(':')) {
+      const parts = trimmed.split(':').map(p => parseInt(p) || 0);
+      if (parts.length === 3) {
+        // HH:MM:SS 格式
+        return parts[0] * 3600 + parts[1] * 60 + parts[2]; // 转换为秒
+      } else if (parts.length === 2) {
+        // HH:MM 格式（如 "05:44"）
+        return parts[0] * 3600 + parts[1] * 60; // 转换为秒
+      }
+    }
+    
+    // 处理包含"分"、"秒"的时间格式
+    if (trimmed.includes('分') || trimmed.includes('秒')) {
+      let seconds = 0;
+      const minuteMatch = trimmed.match(/(\d+(?:\.\d+)?)\s*分/);
+      const secondMatch = trimmed.match(/(\d+(?:\.\d+)?)\s*秒/);
+      if (minuteMatch) seconds += parseFloat(minuteMatch[1]) * 60;
+      if (secondMatch) seconds += parseFloat(secondMatch[1]);
+      return seconds;
+    }
+    
+    // 普通数字解析
+    const num = parseFloat(trimmed);
+    return isNaN(num) ? 0 : num;
+  }
+  
+  // 其他类型，尝试直接转换
   const num = parseFloat(value);
   return isNaN(num) ? 0 : num;
 };
@@ -88,7 +139,29 @@ app.post('/api/upload-excel', upload.single('excel'), (req, res) => {
         currentMonthVisits = parseValue(row[visitColumns[0]]);
       }
 
-      const momChange = calculateMoMChange(currentMonthVisits, previousMonthVisits);
+      // 优先使用Excel中已计算的环比变化
+      let momChange;
+      const excelMomChange = row['访问量环比变化'];
+      
+      // 检查Excel中是否有环比变化列且值不为空
+      if (excelMomChange !== undefined && excelMomChange !== null && excelMomChange !== '') {
+        // 尝试解析为数字
+        const parsed = parseValue(excelMomChange);
+        // 如果解析后的值不为0，或者原始值就是0，则使用解析后的值
+        if (parsed !== 0 || excelMomChange === 0 || excelMomChange === '0') {
+          momChange = parsed;
+        } else {
+          // 如果解析为0但原始值不为0，可能是特殊格式，尝试直接转换
+          momChange = typeof excelMomChange === 'string' ? parseFloat(excelMomChange) : excelMomChange;
+          if (isNaN(momChange)) {
+            // 如果还是无法解析，则自动计算
+            momChange = calculateMoMChange(currentMonthVisits, previousMonthVisits);
+          }
+        }
+      } else {
+        // Excel中没有环比变化列或值为空，自动计算
+        momChange = calculateMoMChange(currentMonthVisits, previousMonthVisits);
+      }
 
       return {
         id: index + 1,
@@ -270,10 +343,136 @@ const loadTrafficData = () => {
     const worksheet = workbook.Sheets[sheetName];
     const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
+    // 自动识别最新的两个月份访问量列
+    // 优先尝试十月和九月，如果不存在则尝试九月和八月
+    let currentMonthColumn = '十月访问量';
+    let previousMonthColumn = '九月访问量';
+    
+    // 检查列是否存在（使用第一行数据来检查）
+    if (jsonData.length > 0) {
+      const firstRow = jsonData[0];
+      const keys = Object.keys(firstRow);
+      
+      // 查找所有包含"访问量"的列
+      const visitColumns = keys.filter(key => 
+        key.includes('访问量') && !key.includes('环比') && !key.includes('变化')
+      );
+      
+      if (visitColumns.length > 0) {
+        // 月份映射表（用于排序）
+        const monthOrder = {
+          '一月': 1, '二月': 2, '三月': 3, '四月': 4, '五月': 5, '六月': 6,
+          '七月': 7, '八月': 8, '九月': 9, '十月': 10, '十一月': 11, '十二月': 12
+        };
+        
+        // 按月份排序访问量列
+        visitColumns.sort((a, b) => {
+          const monthA = Object.keys(monthOrder).find(m => a.includes(m));
+          const monthB = Object.keys(monthOrder).find(m => b.includes(m));
+          const orderA = monthA ? monthOrder[monthA] : 0;
+          const orderB = monthB ? monthOrder[monthB] : 0;
+          return orderB - orderA; // 降序，最新的在前
+        });
+        
+        // 取最新的两个月份
+        if (visitColumns.length >= 2) {
+          currentMonthColumn = visitColumns[0];
+          previousMonthColumn = visitColumns[1];
+          console.log(`自动识别月份列: 当月=${currentMonthColumn}, 上月=${previousMonthColumn}`);
+        } else if (visitColumns.length === 1) {
+          currentMonthColumn = visitColumns[0];
+          previousMonthColumn = null;
+          console.log(`只找到一个月份列: ${currentMonthColumn}`);
+        }
+      }
+    }
+
+    // 调试：打印第一行的所有列名，帮助识别实际的列名
+    if (jsonData.length > 0) {
+      const firstRowKeys = Object.keys(jsonData[0]);
+      console.log('Excel文件中的列名:', firstRowKeys);
+      // 查找购买转化率相关的列
+      const conversionColumns = firstRowKeys.filter(key => 
+        key.includes('购买') && (key.includes('转化') || key.includes('转换'))
+      );
+      const durationColumns = firstRowKeys.filter(key => 
+        key.includes('访问时长') || key.includes('时长')
+      );
+      console.log('找到的购买转化率相关列:', conversionColumns);
+      console.log('找到的平均访问时长相关列:', durationColumns);
+    }
+
     const processedData = jsonData.map((row, index) => {
-      const currentMonthVisits = parseValue(row['九月访问量']);
-      const previousMonthVisits = parseValue(row['八月访问量']);
-      const momChange = calculateMoMChange(currentMonthVisits, previousMonthVisits);
+      const currentMonthVisits = parseValue(row[currentMonthColumn]);
+      const previousMonthVisits = previousMonthColumn ? parseValue(row[previousMonthColumn]) : 0;
+      
+      // 优先使用Excel中已计算的环比变化
+      let momChange;
+      const excelMomChange = row['访问量环比变化'];
+      
+      // 检查Excel中是否有环比变化列且值不为空
+      if (excelMomChange !== undefined && excelMomChange !== null && excelMomChange !== '') {
+        // 尝试解析为数字
+        const parsed = parseValue(excelMomChange);
+        // 如果解析后的值不为0，或者原始值就是0，则使用解析后的值
+        if (parsed !== 0 || excelMomChange === 0 || excelMomChange === '0') {
+          momChange = parsed;
+        } else {
+          // 如果解析为0但原始值不为0，可能是特殊格式，尝试直接转换
+          momChange = typeof excelMomChange === 'string' ? parseFloat(excelMomChange) : excelMomChange;
+          if (isNaN(momChange)) {
+            // 如果还是无法解析，则自动计算
+            momChange = calculateMoMChange(currentMonthVisits, previousMonthVisits);
+          }
+        }
+      } else {
+        // Excel中没有环比变化列或值为空，自动计算
+        momChange = calculateMoMChange(currentMonthVisits, previousMonthVisits);
+      }
+
+      // 智能查找购买转化率列（支持多种列名变体）
+      let conversionRate = 0;
+      const conversionKeys = Object.keys(row).filter(key => 
+        (key.includes('购买') && (key.includes('转化') || key.includes('转换'))) ||
+        key.toLowerCase().includes('conversion')
+      );
+      if (conversionKeys.length > 0) {
+        // 优先使用第一个匹配的列
+        const rawValue = row[conversionKeys[0]];
+        conversionRate = parseValue(rawValue);
+        // 调试：打印前几条数据的解析结果
+        if (index < 3) {
+          console.log(`[调试] 第${index + 1}行 - 购买转化率: 原始值="${rawValue}", 解析值=${conversionRate}`);
+        }
+      } else {
+        // 如果没有找到，尝试常见的列名
+        conversionRate = parseValue(
+          row['购买转化率'] || row['购买转换率'] || row['Conversion Rate'] || 
+          row['购买转化率(%)'] || row['购买转换率(%)'] || row['转化率'] || row['转换率']
+        );
+      }
+      
+      // 智能查找平均访问时长列（支持多种列名变体）
+      let avgDuration = 0;
+      const durationKeys = Object.keys(row).filter(key => 
+        (key.includes('访问时长') || key.includes('时长')) ||
+        key.toLowerCase().includes('duration') || key.toLowerCase().includes('time')
+      );
+      if (durationKeys.length > 0) {
+        // 优先使用第一个匹配的列
+        const rawValue = row[durationKeys[0]];
+        avgDuration = parseValue(rawValue);
+        // 调试：打印前几条数据的解析结果
+        if (index < 3) {
+          console.log(`[调试] 第${index + 1}行 - 平均访问时长: 原始值="${rawValue}", 解析值=${avgDuration}秒`);
+        }
+      } else {
+        // 如果没有找到，尝试常见的列名
+        avgDuration = parseValue(
+          row['平均访问时长'] || row['Average Duration'] || 
+          row['平均访问时长(秒)'] || row['平均访问时长(分钟)'] || row['访问时长']
+        );
+      }
 
       return {
         id: index + 1,
@@ -282,8 +481,8 @@ const loadTrafficData = () => {
         上月访问量: previousMonthVisits,
         当月访问量: currentMonthVisits,
         访问量环比变化: momChange,
-        购买转化率: parseValue(row['购买转化率']),
-        平均访问时长: parseValue(row['平均访问时长'])
+        购买转化率: conversionRate,
+        平均访问时长: avgDuration
       };
     });
 
